@@ -4,9 +4,9 @@ import numpy as np
 import sympy as sym
 from scipy.integrate import odeint
 
-from linearized_fnc_python.lin_A_B_pend2 import *
-from linearized_fnc_python.lin_A_B_pend3 import *
-from linearized_fnc_python.lin_A_B_airplane import *
+# from lin_A_B_pend2 import *
+# from lin_A_B_pend3 import *
+# from lin_A_B_airplane import *
 
 class Controller:
     """

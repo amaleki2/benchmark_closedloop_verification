@@ -9,10 +9,7 @@ import ipywidgets as widgets
 from IPython.display import display
 from matplotlib.animation import FuncAnimation
 
-## TODO: FIX THIS
-# ORIGIN_PATH = "/home/amaleki/Dropbox/stanford/Python/gym-new-env/gym/envs/classic_control"
-##
-
+ORIGIN_PATH = "airplane/plot_files/"
 
 def add_subplot_axes(ax,rect,axisbg='w'):
     fig = plt.gcf()
@@ -54,7 +51,6 @@ class AirplaneEnv():
             self.x_0 = x_0
         else:
             self.x_0 = np.ones(self.n_state) * x_0
-        print(os.getcwd())
 
         self.airplane_xy_0 = np.loadtxt(os.path.join(ORIGIN_PATH, "plane_xy.txt")).T
         self.airplane_xy_0[0, :] /= 42.

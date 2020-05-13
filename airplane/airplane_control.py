@@ -4,8 +4,6 @@ import json
 import pickle
 import datetime
 import numpy as np
-from controler.util import ControllerAirPlane
-from gym.envs.registration import make
 import matplotlib.pyplot as plt
 
 import keras
