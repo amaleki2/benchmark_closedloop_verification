@@ -1,7 +1,9 @@
+# this example runs pendulum environments with no actuators.
+
 from pendulum import Pendulum1Env, Pendulum2Env, Pendulum3Env
 
 # running a single pendulum
-p1 = Pendulum1Env(x_0=[2., 0.], dt =0.1)
+p1 = Pendulum1Env(x_0=[2., 0.], dt =0.05)
 p1.reset()
 for _ in range(200):
     p1.step([0.])

@@ -1,3 +1,5 @@
+# This example runs the airplane model.
+
 from airplane import AirplaneEnv
 
 # running airplane model

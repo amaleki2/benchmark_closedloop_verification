@@ -28,9 +28,9 @@ class Pendulum():
             - positive y axis is looking downward. hence g= POSITIVE 9.8
     """
     def __init__(self, n_pend,
-                 m=0.5, L=0.5, c=0.1, g=9.8,  # physical paramters
+                 m=0.5, L=0.5, c=0.0, g=1.,  # physical paramters
                  max_action=1000, x_0=0.,  # initializations
-                 integration_method="1st", dt=0.001 # computational parameters.
+                 integration_method="0th", dt=0.001 # computational parameters.
                  ):
         self.m, self.L, self.c = m, L, c
         self.g, self.dt, self.max_action = g, dt, max_action
@@ -57,18 +57,25 @@ class Pendulum():
 
     def step(self, actions):
         actions = np.clip(actions, -self.max_action, self.max_action).tolist()
-
-        if self.integration_method == "1st":
+        if self.integration_method == "0th":
             u_prime = fsolve(self.setup_equation, self.current_guess, args=(self.x, actions))
-        else:
+            self.x[:self.n_state // 2] += self.dt * self.x[self.n_state // 2:]
+            self.x[self.n_state // 2:] += self.dt * u_prime
+        elif self.integration_method == "1st":
+            u_prime = fsolve(self.setup_equation, self.current_guess, args=(self.x, actions))
+            self.x[self.n_state // 2:] += self.dt * u_prime
+            self.x[:self.n_state // 2] += self.dt * self.x[self.n_state // 2:] - 1 / 2 * u_prime * self.dt ** 2
+        elif self.integration_method == "2nd":
             u_prime_half = fsolve(self.setup_equation, self.current_guess, args=(self.x, actions))
-            u_half = self.x[self.n_state//2:] + 1 / 2 * self.dt * u_prime_half
-            th_half = self.x[:self.n_state//2] + 1 / 2 * self.dt * u_half - 1 / 8 * u_prime_half * self.dt ** 2
+            u_half = self.x[self.n_state // 2:] + 1 / 2 * self.dt * u_prime_half
+            th_half = self.x[:self.n_state // 2] + 1 / 2 * self.dt * u_half - 1 / 8 * u_prime_half * self.dt ** 2
             x_half = np.concatenate((th_half, u_half))
             u_prime = fsolve(self.setup_equation, self.current_guess, args=(x_half, actions))
+            self.x[self.n_state // 2:] += self.dt * u_prime
+            self.x[:self.n_state // 2] += self.dt * self.x[self.n_state // 2:] - 1 / 2 * u_prime * self.dt ** 2
+        else:
+            raise(IOError("integration method %s is not recognized" %self.integration_method))
 
-        self.x[self.n_state//2:] += self.dt * u_prime
-        self.x[:self.n_state//2] += self.dt * self.x[self.n_state//2:] - 1 / 2 * u_prime * self.dt ** 2
         costs = np.linalg.norm(self.x) + np.linalg.norm(actions)
         self.history.append({"x": self.x.copy(), "r": -costs, "a": actions})
         return self.x, -costs, False, {}
@@ -183,7 +190,7 @@ class Pendulum():
 
 class Pendulum1Env(Pendulum):
     def __init__(self, x_0=0., dt=0.1):
-        super().__init__(n_pend=1, x_0=x_0, dt=dt, c=0.2, g=1.0, m=1.0, L=1.0)
+        super().__init__(n_pend=1, x_0=x_0, dt=dt)
 
     def setup_equation(self, u_prime, x, torques):
         T = torques[0]
@@ -194,7 +201,7 @@ class Pendulum1Env(Pendulum):
 
 
 class Pendulum2Env(Pendulum):
-    def __init__(self, x_0=0., dt=0.001):
+    def __init__(self, x_0=0., dt=0.01):
         super().__init__(n_pend=2, x_0=x_0, dt=dt)
 
     def setup_equation(self, u_prime, x, torques):
@@ -211,7 +218,7 @@ class Pendulum2Env(Pendulum):
 
 
 class Pendulum3Env(Pendulum):
-    def __init__(self, x_0=0., dt=0.001):
+    def __init__(self, x_0=0., dt=0.01):
         super().__init__(n_pend=3, x_0=x_0, dt=dt)
 
     def setup_equation(self, u_prime, x, torques):

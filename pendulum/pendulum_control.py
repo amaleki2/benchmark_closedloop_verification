@@ -4,8 +4,8 @@ import numpy as np
 import sympy as sym
 from scipy.integrate import odeint
 
-# from lin_A_B_pend2 import *
-# from lin_A_B_pend3 import *
+from pendulum.lin_A_B_pend2 import *
+from pendulum.lin_A_B_pend3 import *
 # from lin_A_B_airplane import *
 
 class Controller:
@@ -404,8 +404,6 @@ class ControllerTriplePendulum(Controller):
                     B_val[i, j] = globals()["pend3_B_%d_%d" % (i + 1, j + 1)](th1, th2, th3, u1, u2, u3, T1, T2, T3, m, g, L, c)
             B_val *= self.env.dt
         return A_val, B_val
-
-
 
 class ControllerAirPlane(Controller):
     def __init__(self, env):

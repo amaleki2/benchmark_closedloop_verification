@@ -1,6 +1,4 @@
 import os
-
-
 import tqdm
 import pickle
 import numpy as np
@@ -14,14 +12,12 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 
 import numpy as np
-from util import ControllerDoublePendulum, ControllerTriplePendulum, ControllerSinglePendulum
 from gym.envs.registration import make
 
 
-# DO NOT USE GPU
-NO_GPU = True
-if NO_GPU:
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
+NO_GPU = False
+if NO_GPU:  # DO NOT USE GPU
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 class PlotLosses(keras.callbacks.Callback):
@@ -82,16 +78,23 @@ class BehaviorClonning:
 
     def generate_data(self):
         for i in range(self.n_data):
+            if os.path.exists(self.folder_name + "history_%d.pkl" %i):
+                continue
+
             x_0 = [0.] *len(self.x_range)
             for k in range(len(self.x_range)):
                 x_k_min, x_k_max = self.x_range[k]
                 x_0[k] = np.random.random()*(x_k_max - x_k_min) + x_k_min
 
-            self.env.env.x_0 = x_0
+            self.env.x_0 = x_0
             self.env.reset()
 
-            ilqr_actions = self.controller.run_ilqr(self.Q, self.R, self.Qf, self.x_goal, self.n_step_ilqr)
-            _            = self.controller.run_lqr(self.Q, self.R, self.x_goal, self.n_step_lqr, ilqr_actions[-1])
+
+            if self.n_step_ilqr != 0:
+                ilqr_actions = self.controller.run_ilqr(self.Q, self.R, self.Qf, self.x_goal, self.n_step_ilqr)
+                _ = self.controller.run_lqr(self.Q, self.R, self.x_goal, self.n_step_lqr, ilqr_actions[-1])
+            else:
+                _ = self.controller.run_lqr(self.Q, self.R, self.x_goal, self.n_step_lqr)
 
             if i < 3:
                 self.env.render(skip=1)
@@ -108,8 +111,12 @@ class BehaviorClonning:
                     x[i - self.n_step_ilqr - 1, :] = data["x"]
                     T[i - self.n_step_ilqr - 1, :] = data["a"]
 
-            if np.linalg.norm(x[-1, :] - self.x_goal) + np.linalg.norm(T[-1, :]) > 0.05:
+            # if np.linalg.norm(x[-1, :] - self.x_goal) + np.linalg.norm(T[-1, :]) > 0.05:
+            #     continue
+            if np.linalg.norm(T[-1, :]) > 0.05:
                 continue
+
+
 
             if 'X_data' not in locals():
                 X_data = x.copy()
@@ -131,7 +138,9 @@ class BehaviorClonning:
                     T[i, :] = data["a"]
 
             x_last, T_last = data_vec[-1]["x"], data_vec[-1]["a"]
-            if np.linalg.norm(x_last - self.x_goal) + np.linalg.norm(T_last) > 0.05:
+            # if np.linalg.norm(x_last - self.x_goal) + np.linalg.norm(T_last) > 0.05:
+            #     continue
+            if np.linalg.norm(T_last) > 0.05:
                 continue
 
             if 'X_data' not in locals():
@@ -163,46 +172,53 @@ class BehaviorClonning:
 
         return X_data, Y_data
 
-    def model_train_ff(self, X_data, Y_data, savepath="trained_model.h5"):
-        data_size, epoch_size, batch_size = None, 150, 32
-        #layer_dims, output_size = [100, 100, 20], Y_data.shape[1]
-        layer_dims, output_size = [50, 10], Y_data.shape[1]
+    def model_train_ff(self, X_data, Y_data, savepath="trained_model.h5",
+                       epoch_size=150, batch_size=32, layer_dims=(50, 10), lr=0.01):
+        output_size = Y_data.shape[1]
         model = Sequential()
         for dim in layer_dims:
             model.add(Dense(dim, activation='relu'))
         model.add(Dense(output_size, activation=None))
 
         checkpoint = ModelCheckpoint(savepath, verbose=1, save_best_only=True)  # , mode = 'max', monitor = 'val_acc')
-        model.compile(loss='mean_squared_error', optimizer='adam', metrics=['mse'])
+        optimizer = keras.optimizers.Adam(learning_rate=lr)
+        model.compile(loss='mean_squared_error', optimizer=optimizer)
         callbacks = [checkpoint, ReduceLROnPlateau(patience=5, factor=0.5, verbose=True, min_lr=1E-4), PlotLosses()]
 
-        model.fit(x=X_data, y=Y_data,
+        model.fit(x=X_data,
+                  y=Y_data,
                   batch_size=batch_size,
                   epochs=epoch_size,
                   verbose=1,
                   callbacks=callbacks,
-                  validation_split=0.1, shuffle=True)
+                  validation_split=0.1,
+                  shuffle=True)
 
     def run_model(self, x_0, n_max):
-        env.env.x_0 = x_0
-        env.reset()
+        self.env.x_0 = x_0
+        self.env.reset()
 
         model_ilqr = load_model('model_ilqr.h5')
         model_lqr = load_model('model_lqr.h5')
         model = model_ilqr
         print(self.env.x)
         msg = "using ilqr model"
+        n_being_stable = 0
         for i in range(n_max):
             state_norms = np.linalg.norm(self.env.x)
             if state_norms < 0.025:
                 msg = "stabilized"
-                break
-            elif (model == model_ilqr) & (state_norms < 1.0):
+                n_being_stable += 1
+                if n_being_stable > 20:
+                    break
+            elif (model == model_ilqr) & (state_norms < 0.75):
                 msg = "using lqr model"
                 model = model_lqr
-            elif (model == model_lqr) & (state_norms > 5.0):
+                n_being_stable = 0
+            elif (model == model_lqr) & (state_norms > 2.0):
                 msg = "using ilqr"
                 model = model_ilqr
+                n_being_stable = 0
             nn_in = np.atleast_2d(self.env.x)
             nn_out = model.predict(nn_in)
             torques = nn_out[0]
@@ -358,12 +374,12 @@ if __name__ == '__main__':
     #     # setup training data for ilqr model
     #     X_data_ilqr, Y_data_ilqr = bh.make_data_ilqr()
     #     # train ilqr network
-    #     bh.model_train_ff(X_data_ilqr, Y_data_ilqr, "model_ilqr.h5")
+    #     bh.model_train_ff(X_data_ilqr, Y_data_ilqr, "model_ilqr_dt2.h5")
     #
     #     #setup training data for lqr model
     #     X_data_lqr, Y_data_lqr = bh.make_data_lqr()
     #     # train lqr network
-    #     bh.model_train_ff(X_data_lqr, Y_data_lqr, "model_lqr.h5")
+    #     bh.model_train_ff(X_data_lqr, Y_data_lqr, "model_lqr_dt2.h5")
     #
     # # choose a random initial state
     # ns = bh.env.n_state
@@ -395,12 +411,12 @@ if __name__ == '__main__':
         # setup training data for ilqr model
         X_data_ilqr, Y_data_ilqr = bh.make_data_ilqr()
         # train ilqr network
-        bh.model_train_ff(X_data_ilqr, Y_data_ilqr, "model_ilqr.h5")
+        bh.model_train_ff(X_data_ilqr, Y_data_ilqr, "model_ilqr_dt2.h5")
 
         #setup training data for lqr model
         X_data_lqr, Y_data_lqr = bh.make_data_lqr()
         # train lqr network
-        bh.model_train_ff(X_data_lqr, Y_data_lqr, "model_lqr.h5")
+        bh.model_train_ff(X_data_lqr, Y_data_lqr, "model_lqr_dt2.h5")
 
     # choose a random initial state
     ns = bh.env.n_state
