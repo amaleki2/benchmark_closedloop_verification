@@ -1,4 +1,5 @@
-# benchmark_closedloop_verification
-This is a set of benchmark problems for AINNC2020
-See AINNC_benchmark.pdf for more details. In particular for the benchmark model parameters, controllers' details and 
-specifications, see Section 3: Benchmarks specifications.
+# benchmark examples for closedloop verification
+This repo contains a set of benchmark problems for verification problem of closed loop system that are controlled by neural network system.
+The examples are used as part of the ARCH-COMP 2020 Compeition: see the [report](https://easychair.org/publications/paper/Jvwg)
+
+For details of the examples see [AINNC_benchmark.pdf](AINNC_benchmark.pdf) for more details. 
